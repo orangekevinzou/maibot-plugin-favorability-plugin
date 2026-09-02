@@ -1,0 +1,19 @@
+[plugin]
+enabled = true
+config_version = "1.3.0"
+
+[llm]
+api_url = "https://api.longcat.chat/openai/v1/chat/completions"
+api_key = "ak_114514"
+model = "LongCat-2.0"
+temperature = 0.3
+max_tokens = 10240
+
+[judge]
+judge_interval = 15
+max_change_per_judge = 10
+initial_score = 0
+history_window = 20
+
+[admin]
+admin_users = ["123456789"]
