@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>麦麦好感度变化可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            font-size: 2em;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #fff;
+        }
+        .stat-card .label {
+            font-size: 0.85em;
+            color: #888;
+            margin-top: 5px;
+        }
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .card h2 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #fff;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+        .chart-container-sm {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .filters label {
+            font-size: 0.85em;
+            color: #888;
+        }
+        .filters select, .filters input {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #e0e0e0;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
+        .filters select:focus, .filters input:focus {
+            outline: none;
+            border-color: #48dbfb;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .file-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #fileInput { display: none; }
+        .file-label {
+            background: rgba(255,255,255,0.08);
+            border: 1px dashed rgba(255,255,255,0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: border-color 0.2s;
+        }
+        .file-label:hover { border-color: #48dbfb; }
+        .ranking-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: background 0.2s;
+        }
+        .ranking-item:hover { background: rgba(255,255,255,0.03); }
+        .ranking-pos {
+            width: 30px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .ranking-pos.gold { color: #ffd700; }
+        .ranking-pos.silver { color: #c0c0c0; }
+        .ranking-pos.bronze { color: #cd7f32; }
+        .ranking-name { flex: 1; }
+        .ranking-name .nickname { font-weight: 500; }
+        .ranking-name .user-id { font-size: 0.8em; color: #666; }
+        .ranking-score {
+            font-size: 1.3em;
+            font-weight: bold;
+            min-width: 50px;
+            text-align: right;
+        }
+        .ranking-score.positive { color: #2ecc71; }
+        .ranking-score.negative { color: #e74c3c; }
+        .ranking-score.neutral { color: #95a5a6; }
+        .ranking-delta {
+            font-size: 0.85em;
+            min-width: 60px;
+            text-align: right;
+        }
+        .ranking-delta.up { color: #2ecc71; }
+        .ranking-delta.down { color: #e74c3c; }
+        .ranking-delta.flat { color: #95a5a6; }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            margin-left: 8px;
+        }
+        .tag.llm { background: rgba(72, 219, 251, 0.2); color: #48dbfb; }
+        .tag.admin { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+        .changes-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+        .changes-table th {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            color: #888;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            background: rgba(26, 26, 46, 0.95);
+        }
+        .changes-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .changes-table tr:hover td { background: rgba(255,255,255,0.03); }
+        .delta-up { color: #2ecc71; }
+        .delta-down { color: #e74c3c; }
+        .delta-flat { color: #95a5a6; }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-state .icon { font-size: 3em; margin-bottom: 15px; }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 900px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+        .user-checkbox-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            max-height: 120px;
+            overflow-y: auto;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+        }
+        .user-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .user-checkbox:hover { background: rgba(255,255,255,0.1); }
+        .range-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.15);
+    outline: none;
+    margin: 0 10px;
+}
+.range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #48dbfb;
+    cursor: pointer;
+    border: 2px solid #1a1a2e;
+    box-shadow: 0 0 6px rgba(72, 219, 251, 0.5);
+    transition: transform 0.2s;
+}
+.range-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+.range-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #48dbfb;
+    cursor: pointer;
+    border: 2px solid #1a1a2e;
+    box-shadow: 0 0 6px rgba(72, 219, 251, 0.5);
+}
+.axis-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+}
+.axis-control label {
+    white-space: nowrap;
+    min-width: 60px;
+}
+.axis-control .slider-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.axis-control .slider-value {
+    min-width: 70px;
+    text-align: right;
+    font-size: 0.85em;
+    color: #48dbfb;
+    font-family: monospace;
+}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💖 麦麦好感度变化可视化</h1>
+        <p class="subtitle">读取 favorability_changes.json 文件，分析好感度变化趋势</p>
+
+        <div class="card">
+            <div class="filters">
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" accept=".json,.jsonl">
+                    <label for="fileInput" class="file-label">📁 选择 JSON 文件</label>
+                    <span id="fileName" style="font-size:0.85em;color:#888;"></span>
+                </div>
+                <button class="btn" onclick="loadDefaultFile()">📂 加载默认文件</button>
+                <div>
+                    <label>用户筛选：</label>
+                    <select id="userFilter" onchange="updateCharts()">
+                        <option value="all">全部用户</option>
+                    </select>
+                </div>
+                <div>
+                    <label>来源：</label>
+                    <select id="sourceFilter" onchange="updateCharts()">
+                        <option value="all">全部</option>
+                        <option value="llm">LLM 判断</option>
+                        <option value="admin">管理员设置</option>
+                    </select>
+                </div>
+                <div>
+                    <label>天数：</label>
+                    <select id="daysFilter" onchange="updateCharts()">
+                        <option value="0">全部</option>
+                        <option value="1">最近 1 天</option>
+                        <option value="3">最近 3 天</option>
+                        <option value="7" selected>最近 7 天</option>
+                        <option value="30">最近 30 天</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="exportCSV()">📊 导出 CSV</button>
+            </div>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+            <div class="icon">📂</div>
+            <p>请选择 favorability_changes.json 文件，或点击"加载默认文件"</p>
+            <p style="font-size:0.85em;margin-top:10px;">默认路径：data/favorability_changes.json</p>
+        </div>
+
+        <div id="dashboard" style="display:none;">
+            <div class="stats-grid" id="statsGrid"></div>
+
+            <div class="card">
+                <h2>📈 好感度变化趋势</h2>
+                <div style="display:flex;flex-wrap:wrap;gap:15px;margin-bottom:15px;">
+                    <div class="axis-control">
+                        <label>📅 X轴</label>
+                        <div class="slider-wrapper">
+                            <input type="range" id="xMinSlider" class="range-slider" min="0" max="100" value="0" oninput="onXAxisChange()">
+                            <span class="slider-value" id="xRangeLabel">全部</span>
+                            <input type="range" id="xMaxSlider" class="range-slider" min="0" max="100" value="100" oninput="onXAxisChange()">
+                        </div>
+                        <button class="btn" style="padding:4px 10px;font-size:0.8em;" onclick="resetXAxis()">重置</button>
+                    </div>
+                    <div class="axis-control">
+                        <label>📊 Y轴</label>
+                        <div class="slider-wrapper">
+                            <input type="range" id="yMinSlider" class="range-slider" min="-100" max="100" value="-100" oninput="onYAxisChange()">
+                            <span class="slider-value" id="yRangeLabel">-100 ~ 100</span>
+                            <input type="range" id="yMaxSlider" class="range-slider" min="-100" max="100" value="100" oninput="onYAxisChange()">
+                        </div>
+                        <button class="btn" style="padding:4px 10px;font-size:0.8em;" onclick="resetYAxis()">重置</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h2>🏆 好感度排行榜</h2>
+                    <div class="ranking-list" id="rankingList"></div>
+                </div>
+                <div class="card">
+                    <h2>📊 来源分布</h2>
+                    <div class="chart-container-sm">
+                        <canvas id="sourceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📝 变化记录明细</h2>
+                <div style="max-height:500px;overflow-y:auto;">
+                    <table class="changes-table">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>用户</th>
+                                <th>变化</th>
+                                <th>分数</th>
+                                <th>原因</th>
+                                <th>来源</th>
+                            </tr>
+                        </thead>
+                        <tbody id="changesTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let rawData = [];
+        let filteredData = [];
+        let trendChart = null;
+        let sourceChart = null;
+
+        const COLORS = [
+            '#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff',
+            '#5f27cd', '#00d2d3', '#ff9f43', '#ee5a24', '#0abde3',
+            '#10ac84', '#c8d6e5', '#8395a7', '#222f3e', '#f368e0'
+        ];
+
+        function getUserColor(idx) {
+            return COLORS[idx % COLORS.length];
+        }
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('fileName').textContent = file.name;
+                readFile(file);
+            }
+        });
+
+        function readFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                parseData(e.target.result);
+            };
+            reader.readAsText(file);
+        }
+
+        function loadDefaultFile() {
+            fetch('favorability_changes.json')
+                .then(r => r.text())
+                .then(text => parseData(text))
+                .catch(() => {
+                    alert('无法加载默认文件，请手动选择文件');
+                });
+        }
+
+        function parseData(text) {
+            rawData = [];
+            const lines = text.trim().split('\n');
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                    const entry = JSON.parse(line);
+                    rawData.push(entry);
+                } catch(e) {}
+            }
+            if (rawData.length === 0) {
+                alert('文件为空或格式错误');
+                return;
+            }
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            populateUserFilter();
+            updateCharts();
+        }
+
+        function populateUserFilter() {
+            const users = {};
+            for (const entry of rawData) {
+                users[entry.user_id] = entry.nickname || entry.user_id;
+            }
+            const select = document.getElementById('userFilter');
+            select.innerHTML = '<option value="all">全部用户</option>';
+            Object.entries(users).sort((a,b) => (a[1]||'').localeCompare(b[1]||'')).forEach(([id, name]) => {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = name ? `${name} (${id})` : id;
+                select.appendChild(opt);
+            });
+        }
+
+        function getFilteredData() {
+            const userId = document.getElementById('userFilter').value;
+            const source = document.getElementById('sourceFilter').value;
+            const days = parseInt(document.getElementById('daysFilter').value);
+
+            let data = [...rawData];
+
+            if (userId !== 'all') {
+                data = data.filter(d => d.user_id === userId);
+            }
+            if (source !== 'all') {
+                data = data.filter(d => d.source === source);
+            }
+            if (days > 0) {
+                const cutoff = new Date();
+                cutoff.setDate(cutoff.getDate() - days);
+                data = data.filter(d => new Date(d.timestamp) >= cutoff);
+            }
+
+            return data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        }
+
+        function updateCharts() {
+            filteredData = getFilteredData();
+            renderStats();
+            renderTrendChart();
+            renderRanking();
+            renderSourceChart();
+            renderTable();
+        }
+
+        function renderStats() {
+            const totalChanges = filteredData.length;
+            const userIds = new Set(filteredData.map(d => d.user_id));
+            const upvotes = filteredData.filter(d => d.delta > 0).length;
+            const downvotes = filteredData.filter(d => d.delta < 0).length;
+
+            const currentScores = {};
+            for (const entry of filteredData) {
+                currentScores[entry.user_id] = entry.new_score;
+            }
+            const topUser = Object.entries(currentScores).sort((a,b) => b[1] - a[1])[0];
+
+            document.getElementById('statsGrid').innerHTML = `
+                <div class="stat-card"><div class="value">${totalChanges}</div><div class="label">变化次数</div></div>
+                <div class="stat-card"><div class="value">${userIds.size}</div><div class="label">涉及用户</div></div>
+                <div class="stat-card"><div class="value" style="color:#2ecc71">${upvotes}</div><div class="label">⬆ 上升次数</div></div>
+                <div class="stat-card"><div class="value" style="color:#e74c3c">${downvotes}</div><div class="label">⬇ 下降次数</div></div>
+                <div class="stat-card"><div class="value">${topUser ? topUser[1] : '-'}</div><div class="label">🏆 ${topUser ? (topUser[1] ? (rawData.find(d=>d.user_id===topUser[0])?.nickname || topUser[0]) : topUser[0]) : '-'} 的分数</div></div>
+            `;
+        }
+
+        function renderTrendChart() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+
+            const userIds = [...new Set(filteredData.map(d => d.user_id))];
+            const datasets = userIds.map((uid, idx) => {
+                const userData = filteredData.filter(d => d.user_id === uid);
+                const nickname = userData[0]?.nickname || uid;
+
+                let cumulative = {};
+                for (const entry of userData) {
+                    cumulative[entry.timestamp] = entry.new_score;
+                }
+
+                const points = Object.entries(cumulative)
+                    .sort((a,b) => new Date(a[0]) - new Date(b[0]))
+                    .map(([t, s]) => ({ x: new Date(t), y: s }));
+
+                return {
+                    label: nickname,
+                    data: points,
+                    borderColor: getUserColor(idx),
+                    backgroundColor: getUserColor(idx) + '20',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    tension: 0.3,
+                    fill: false,
+                };
+            });
+
+            if (trendChart) trendChart.destroy();
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#ccc', padding: 15, usePointStyle: true }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => items[0]?.label || '',
+                                afterBody: (items) => {
+                                    const ts = items[0]?.parsed?.x;
+                                    const changes = filteredData.filter(d => Math.abs(new Date(d.timestamp) - ts) < 1000);
+                                    return changes.map(c => `${c.nickname || c.user_id}: ${c.delta > 0 ? '+' : ''}${c.delta} (${c.reason?.substring(0,30) || ''})`).join('\n');
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { unit: 'hour', displayFormats: { hour: 'MM-dd HH:mm' } },
+                            ticks: { color: '#888', maxTicksLimit: 10 },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        y: {
+                            ticks: { color: '#888' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        }
+                    }
+                }
+            });
+
+            // 初始化滑块
+            initAxisSliders();
+            resetXAxis();
+            resetYAxis();
+        }
+
+        function renderRanking() {
+            const scores = {};
+            for (const entry of filteredData) {
+                scores[entry.user_id] = { score: entry.new_score, nickname: entry.nickname || entry.user_id };
+            }
+            const sorted = Object.entries(scores).sort((a, b) => b[1].score - a[1].score);
+
+            let html = '';
+            sorted.forEach(([uid, info], idx) => {
+                const posClass = idx === 0 ? 'gold' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : '';
+                const scoreClass = info.score > 0 ? 'positive' : info.score < 0 ? 'negative' : 'neutral';
+                const lastChange = filteredData.filter(d => d.user_id === uid).pop();
+                const deltaClass = lastChange ? (lastChange.delta > 0 ? 'up' : lastChange.delta < 0 ? 'down' : 'flat') : 'flat';
+                const deltaText = lastChange ? `${lastChange.delta > 0 ? '+' : ''}${lastChange.delta}` : '-';
+                html += `
+                    <div class="ranking-item">
+                        <span class="ranking-pos ${posClass}">${idx + 1}</span>
+                        <div class="ranking-name">
+                            <div class="nickname">${info.nickname}</div>
+                            <div class="user-id">${uid}</div>
+                        </div>
+                        <div class="ranking-delta ${deltaClass}">${deltaText}</div>
+                        <div class="ranking-score ${scoreClass}">${info.score}</div>
+                    </div>
+                `;
+            });
+            document.getElementById('rankingList').innerHTML = html || '<div style="text-align:center;padding:20px;color:#666;">暂无数据</div>';
+        }
+
+        function renderSourceChart() {
+            const ctx = document.getElementById('sourceChart').getContext('2d');
+            const counts = { llm: 0, admin: 0 };
+            for (const entry of filteredData) {
+                counts[entry.source] = (counts[entry.source] || 0) + 1;
+            }
+
+            if (sourceChart) sourceChart.destroy();
+            sourceChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['LLM 判断', '管理员设置'],
+                    datasets: [{
+                        data: [counts.llm, counts.admin],
+                        backgroundColor: ['#48dbfb', '#ff6b6b'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#ccc', padding: 15 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('changesTableBody');
+            const data = [...filteredData].reverse().slice(0, 200);
+            let html = '';
+            for (const entry of data) {
+                const deltaClass = entry.delta > 0 ? 'delta-up' : entry.delta < 0 ? 'delta-down' : 'delta-flat';
+                const deltaText = entry.delta > 0 ? `+${entry.delta}` : `${entry.delta}`;
+                const time = entry.timestamp?.replace('T', ' ') || '';
+                const tagClass = entry.source || 'llm';
+                const tagText = entry.source === 'admin' ? '管理员' : 'LLM';
+                html += `
+                    <tr>
+                        <td style="color:#888;white-space:nowrap;">${time}</td>
+                        <td>${entry.nickname || entry.user_id}</td>
+                        <td class="${deltaClass}" style="font-weight:bold;">${deltaText}</td>
+                        <td>${entry.old_score} → ${entry.new_score}</td>
+                        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${entry.reason || ''}">${entry.reason || '-'}</td>
+                        <td><span class="tag ${tagClass}">${tagText}</span></td>
+                    </tr>
+                `;
+            }
+            tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:#666;">暂无数据</td></tr>';
+        }
+
+        function exportCSV() {
+            if (filteredData.length === 0) return alert('暂无数据可导出');
+            const headers = ['时间', '用户ID', '昵称', '变化前', '变化后', '变化值', '原因', '来源'];
+            const rows = filteredData.map(d => [
+                d.timestamp, d.user_id, d.nickname || '', d.old_score, d.new_score, d.delta,
+                `"${(d.reason || '').replace(/"/g, '""')}"`, d.source
+            ]);
+            const csv = '﻿' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `favorability_changes_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ===== X/Y 轴滑块控制 =====
+
+        let dataTimeMin = null;
+        let dataTimeMax = null;
+
+        function initAxisSliders() {
+            if (filteredData.length === 0) {
+                dataTimeMin = null;
+                dataTimeMax = null;
+                return;
+            }
+            const times = filteredData.map(d => new Date(d.timestamp).getTime());
+            dataTimeMin = Math.min(...times);
+            dataTimeMax = Math.max(...times);
+
+            // 如果时间范围太小，扩展一下
+            if (dataTimeMax - dataTimeMin < 60000) {
+                dataTimeMax = dataTimeMin + 60000;
+            }
+        }
+
+        function onXAxisChange() {
+            if (!trendChart || filteredData.length === 0) return;
+
+            let minPct = parseInt(document.getElementById('xMinSlider').value);
+            let maxPct = parseInt(document.getElementById('xMaxSlider').value);
+
+            // 防止滑块交叉
+            if (minPct >= maxPct) {
+                minPct = maxPct - 1;
+                document.getElementById('xMinSlider').value = minPct;
+            }
+
+            if (dataTimeMin === null || dataTimeMax === null) {
+                initAxisSliders();
+            }
+
+            const range = dataTimeMax - dataTimeMin;
+            const xMin = new Date(dataTimeMin + range * minPct / 100);
+            const xMax = new Date(dataTimeMin + range * maxPct / 100);
+
+            trendChart.options.scales.x.min = xMin;
+            trendChart.options.scales.x.max = xMax;
+            trendChart.update('none');
+
+            // 更新标签
+            const fmt = (d) => {
+                const now = new Date();
+                const diffDays = Math.floor((now - d) / 86400000);
+                if (diffDays === 0) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                if (diffDays < 7) return `${diffDays}天前`;
+                return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+            };
+            document.getElementById('xRangeLabel').textContent = `${fmt(xMin)} ~ ${fmt(xMax)}`;
+        }
+
+        function onYAxisChange() {
+            if (!trendChart) return;
+
+            let minVal = parseInt(document.getElementById('yMinSlider').value);
+            let maxVal = parseInt(document.getElementById('yMaxSlider').value);
+
+            // 防止滑块交叉
+            if (minVal >= maxVal) {
+                minVal = maxVal - 1;
+                document.getElementById('yMinSlider').value = minVal;
+            }
+
+            trendChart.options.scales.y.min = minVal;
+            trendChart.options.scales.y.max = maxVal;
+            trendChart.update('none');
+
+            // 更新标签
+            document.getElementById('yRangeLabel').textContent = `${minVal} ~ ${maxVal}`;
+        }
+
+        function resetXAxis() {
+            document.getElementById('xMinSlider').value = 0;
+            document.getElementById('xMaxSlider').value = 100;
+            if (trendChart) {
+                trendChart.options.scales.x.min = undefined;
+                trendChart.options.scales.x.max = undefined;
+                trendChart.update('none');
+            }
+            document.getElementById('xRangeLabel').textContent = '全部';
+        }
+
+        function resetYAxis() {
+            document.getElementById('yMinSlider').value = -100;
+            document.getElementById('yMaxSlider').value = 100;
+            if (trendChart) {
+                trendChart.options.scales.y.min = -100;
+                trendChart.options.scales.y.max = 100;
+                trendChart.update('none');
+            }
+            document.getElementById('yRangeLabel').textContent = '-100 ~ 100';
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadDefaultFile();
+        });
+    </script>
+</body>
+</html>
